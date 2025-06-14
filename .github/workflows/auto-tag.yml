@@ -8,11 +8,11 @@ on:
       - main
       - 'hotfix/*'
       - 'bugfix/*'
-    types: [closed]  # Only run when a PR is closed
+    types: [closed]
 
 jobs:
   auto-tag:
-    if: github.event.pull_request.merged == true  # Only run if the PR was merged
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:
@@ -32,8 +32,7 @@ jobs:
         run: |
           latest="${{ steps.get_latest_tag.outputs.latest }}"
           IFS='.' read -r major minor patch <<< "$latest"
-
-          branch="${{ github.base_ref }}"  # PR was merged *into* this branch
+          branch="${{ github.base_ref }}"
 
           if [[ "$branch" == "main" ]]; then
             major=$((major + 1)); minor=0; patch=0
@@ -61,16 +60,15 @@ jobs:
 
           if git rev-parse "$tag" >/dev/null 2>&1; then
             echo "❌ Tag $tag already exists. Auto-incrementing patch..."
-
             IFS='.' read -r major minor patch <<< "$tag"
             patch=$((patch + 1))
             new_tag="$major.$minor.$patch"
-
             git tag "$new_tag"
-            git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$new_tag"
+            git push https://${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$new_tag"
             echo "✅ Fallback tag pushed: $new_tag"
           else
+            echo "✅ Creating tag: $tag"
             git tag "$tag"
-            git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
+            git push https://${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
             echo "✅ Pushed tag: $tag"
           fi
