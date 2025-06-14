@@ -1,83 +1,92 @@
 name: 🚀 Auto Semantic Versioning & Tagging (PR‑Based)
 
-# Grant write permission so pushing tags is allowed
+# Give the runner permission to push tags back
 permissions:
   contents: write
 
 on:
   pull_request:
     branches:
-      - develop
-      - release
       - main
+      - release
+      - develop
       - 'hotfix/*'
       - 'bugfix/*'
     types: [closed]
 
 jobs:
   auto-tag:
+    # Only run if the PR was merged
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout using your PAT and disable default credentials
-      - name: 📥 Checkout with GH_PAT
+      # 1️⃣ Checkout with your PAT to override the default GITHUB_TOKEN
+      - name: Checkout with GH_PAT
         uses: actions/checkout@v4
         with:
-          # use your PAT so pushes use GH_PAT instead of GITHUB_TOKEN
           token: ${{ secrets.GH_PAT }}
           persist-credentials: false
           fetch-depth: 0
 
-      # 2️⃣ Get the latest existing tag
-      - name: 🔍 Get latest tag
+      # 2️⃣ Look up the latest tag (or default to 0.0.0)
+      - name: Get latest tag
         id: get_latest_tag
         run: |
           latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
           echo "latest=$latest" >> $GITHUB_OUTPUT
 
-      # 3️⃣ Compute the next semantic version
-      - name: 📈 Determine next version
+      # 3️⃣ Decide whether to bump major, minor, or patch
+      - name: Determine next version
         id: bump_version
         run: |
           latest="${{ steps.get_latest_tag.outputs.latest }}"
           IFS='.' read -r major minor patch <<< "$latest"
-          branch="${{ github.base_ref }}"
 
-          if [[ "$branch" == "main" ]]; then
+          base="${{ github.base_ref }}"   # branch the PR was merged *into*
+          head="${{ github.head_ref }}"   # branch the PR came *from*
+
+          echo "Base branch: $base"
+          echo "Head branch: $head"
+
+          if [[ "$base" == "main" ]]; then
+            # Merges into main are major releases
             major=$((major + 1)); minor=0; patch=0
-          elif [[ "$branch" == "release" ]]; then
+
+          elif [[ "$base" == "release" ]]; then
+            # Merges into release bump minor
             minor=$((minor + 1)); patch=0
-          elif [[ "$branch" == hotfix/* || "$branch" == bugfix/* ]]; then
+
+          elif [[ "$head" == hotfix/* || "$head" == bugfix/* ]]; then
+            # PRs *from* hotfix/* or bugfix/* bump patch
             patch=$((patch + 1))
+
           else
+            # All other PRs (features into develop) bump minor
             minor=$((minor + 1)); patch=0
           fi
 
           new_tag="$major.$minor.$patch"
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
+          echo "Next version tag: $new_tag"
 
-      # 4️⃣ Configure a proper Git identity
-      - name: 🛠 Configure Git
+      # 4️⃣ Configure Git identity for tagging
+      - name: Configure Git
         run: |
           git config user.name "vigneshd.dev"
           git config user.email "vigneshd.dev@gmail.com"
 
-      # 5️⃣ Create and push the tag
-      - name: 🏷 Create & push tag
+      # 5️⃣ Create and push the new tag
+      - name: Create & push tag
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           tag="${{ steps.bump_version.outputs.tag }}"
-          echo "🏷 Tagging with: $tag"
+          echo "Creating tag: $tag"
 
-          # (Optional) remove any extraheader if present
+          # Remove any extraheader so GITHUB_TOKEN isn't used
           git config --local --unset-all http.https://github.com/.extraheader || true
 
-          # Create the tag
           git tag "$tag"
-
-          # Push via PAT-authenticated remote
           git push https://vigneshd-dev:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
-
           echo "✅ Pushed tag: $tag"
