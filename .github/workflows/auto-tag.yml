@@ -3,16 +3,16 @@ name: 🚀 Auto Semantic Versioning & Tagging (PR-Based)
 on:
   pull_request:
     branches:
-      - main
-      - release
       - develop
+      - release
+      - main
       - 'hotfix/*'
       - 'bugfix/*'
-    types: [closed]
+    types: [closed]  # Trigger only when PR is closed
 
 jobs:
   auto-tag:
-    if: github.event.pull_request.merged == true
+    if: github.event.pull_request.merged == true  # Ensure PR was actually merged
     runs-on: ubuntu-latest
 
     steps:
@@ -20,6 +20,12 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Debug PR Info
+        run: |
+          echo "👉 github.ref: ${{ github.ref }}"
+          echo "👉 github.base_ref (merged into): ${{ github.base_ref }}"
+          echo "👉 github.head_ref (source): ${{ github.head_ref }}"
 
       - name: Get latest tag
         id: get_latest_tag
@@ -32,6 +38,7 @@ jobs:
         run: |
           latest="${{ steps.get_latest_tag.outputs.latest }}"
           IFS='.' read -r major minor patch <<< "$latest"
+
           branch="${{ github.base_ref }}"
 
           if [[ "$branch" == "main" ]]; then
@@ -46,6 +53,7 @@ jobs:
 
           new_tag="$major.$minor.$patch"
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
+          echo "➡️ Next version tag: $new_tag"
 
       - name: Configure Git
         run: |
@@ -69,4 +77,5 @@ jobs:
           else
             git tag "$tag"
             git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
-            echo "✅ Pushed tag: $tag"
+            echo "✅ Tag pushed: $tag"
+          fi
