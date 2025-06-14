@@ -1,0 +1,12 @@
+name: 🔐 Test GH_PAT
+
+on: [workflow_dispatch]
+
+jobs:
+  test-secret:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo secret
+        run: echo "GH_PAT is set!"
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
