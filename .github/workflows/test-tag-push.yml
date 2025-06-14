@@ -1,9 +1,9 @@
-- name: Ìø∑Ô∏è Tag and Push with GH_PAT
+- name: Tag and Push with GH_PAT
   env:
     GH_PAT: ${{ secrets.GH_PAT }}
   run: |
     tag="test-manual-1.0.0"
-    echo "Ìø∑Ô∏è Tagging with: $tag"
+    echo " Tagging with: $tag"
 
     # Override Git remote to use GH_PAT
     git remote set-url origin https://vigneshd-dev:${GH_PAT}@github.com/${{ github.repository }}
