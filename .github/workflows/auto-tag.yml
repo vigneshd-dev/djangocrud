@@ -8,7 +8,7 @@ on:
       - main
       - 'hotfix/*'
       - 'bugfix/*'
-    types: [closed]  # Only run when a PR is closed
+    types: [closed]
 
 jobs:
   auto-tag:
@@ -48,28 +48,32 @@ jobs:
           new_tag="$major.$minor.$patch"
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
 
-      - name: Configure Git
+      - name: Configure Git identity
         run: |
           git config user.name "vigneshd.dev"
           git config user.email "vigneshd.dev@gmail.com"
 
-      - name: 🏷️ Create and push new tag (with fallback)
+      - name: 🏷️ Create and Push Tag using GH_PAT
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           tag="${{ steps.bump_version.outputs.tag }}"
-          echo "✅ Creating tag: $tag"
 
+          # Force Git to use PAT-authenticated remote
+          git remote set-url origin https://vigneshd-dev:${GH_PAT}@github.com/${{ github.repository }}
+
+          # Check if tag already exists
           if git rev-parse "$tag" >/dev/null 2>&1; then
             echo "❌ Tag $tag already exists. Auto-incrementing patch..."
             IFS='.' read -r major minor patch <<< "$tag"
             patch=$((patch + 1))
             new_tag="$major.$minor.$patch"
             git tag "$new_tag"
-            git push https://vigneshd-dev:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$new_tag"
+            git push origin "refs/tags/$new_tag"
             echo "✅ Fallback tag pushed: $new_tag"
           else
+            echo "✅ Creating tag: $tag"
             git tag "$tag"
-            git push https://vigneshd-dev:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
-            echo "✅ Pushed tag: $tag"
+            git push origin "refs/tags/$tag"
+            echo "✅ Tag pushed: $tag"
           fi
