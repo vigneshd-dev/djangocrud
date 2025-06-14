@@ -3,35 +3,39 @@ name: 🚀 Auto Semantic Versioning & Tagging (PR-Based)
 on:
   pull_request:
     branches:
-      - develop
-      - release
       - main
+      - release
+      - develop
       - 'hotfix/*'
       - 'bugfix/*'
-    types: [closed]  # Trigger only when PR is closed
+    types: [closed]
 
 jobs:
   auto-tag:
-    if: github.event.pull_request.merged == true  # Ensure PR was actually merged
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:
+      - name: Enable debug mode
+        run: set -x
+
       - name: Checkout full git history
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Debug PR Info
+      - name: Print debug info
         run: |
-          echo "👉 github.ref: ${{ github.ref }}"
-          echo "👉 github.base_ref (merged into): ${{ github.base_ref }}"
-          echo "👉 github.head_ref (source): ${{ github.head_ref }}"
+          echo "🔀 Base branch (merged into): ${{ github.base_ref }}"
+          echo "🔁 Head branch (PR source): ${{ github.head_ref }}"
+          echo "🔖 GH_PAT set: ${{ secrets.GH_PAT != '' }}"
 
       - name: Get latest tag
         id: get_latest_tag
         run: |
           latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
           echo "latest=$latest" >> $GITHUB_OUTPUT
+          echo "🔖 Latest tag: $latest"
 
       - name: Determine next version
         id: bump_version
@@ -53,29 +57,24 @@ jobs:
 
           new_tag="$major.$minor.$patch"
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
-          echo "➡️ Next version tag: $new_tag"
+          echo "🎯 New tag to push: $new_tag"
 
       - name: Configure Git
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-      - name: Create and push new tag (with fallback)
+      - name: Create and push tag
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           tag="${{ steps.bump_version.outputs.tag }}"
 
           if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "❌ Tag $tag already exists. Auto-incrementing patch..."
-            IFS='.' read -r major minor patch <<< "$tag"
-            patch=$((patch + 1))
-            new_tag="$major.$minor.$patch"
-            git tag "$new_tag"
-            git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$new_tag"
-            echo "✅ Fallback tag pushed: $new_tag"
-          else
-            git tag "$tag"
-            git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
-            echo "✅ Tag pushed: $tag"
+            echo "❌ Tag $tag already exists. Skipping."
+            exit 1
           fi
+
+          echo "✅ Creating tag: $tag"
+          git tag "$tag"
+          git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
