@@ -77,4 +77,4 @@ jobs:
 
           echo "✅ Creating tag: $tag"
           git tag "$tag"
-          git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
+          git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag" 
