@@ -1,4 +1,8 @@
-name: 🚀 Auto Semantic Versioning & Tagging (PR-Based)
+name: 🚀 Auto Semantic Versioning & Tagging (PR‑Based)
+
+# Grant write permission so pushing tags is allowed
+permissions:
+  contents: write
 
 on:
   pull_request:
@@ -16,23 +20,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout full git history
-        uses: actions/checkout@v3
+      # 1️⃣ Checkout using your PAT and disable default credentials
+      - name: 📥 Checkout with GH_PAT
+        uses: actions/checkout@v4
         with:
+          # use your PAT so pushes use GH_PAT instead of GITHUB_TOKEN
+          token: ${{ secrets.GH_PAT }}
+          persist-credentials: false
           fetch-depth: 0
 
-      - name: Get latest tag
+      # 2️⃣ Get the latest existing tag
+      - name: 🔍 Get latest tag
         id: get_latest_tag
         run: |
           latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
           echo "latest=$latest" >> $GITHUB_OUTPUT
 
-      - name: Determine next version
+      # 3️⃣ Compute the next semantic version
+      - name: 📈 Determine next version
         id: bump_version
         run: |
           latest="${{ steps.get_latest_tag.outputs.latest }}"
           IFS='.' read -r major minor patch <<< "$latest"
-
           branch="${{ github.base_ref }}"
 
           if [[ "$branch" == "main" ]]; then
@@ -48,32 +57,27 @@ jobs:
           new_tag="$major.$minor.$patch"
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
 
-      - name: Configure Git identity
+      # 4️⃣ Configure a proper Git identity
+      - name: 🛠 Configure Git
         run: |
           git config user.name "vigneshd.dev"
           git config user.email "vigneshd.dev@gmail.com"
 
-      - name: 🏷️ Create and Push Tag using GH_PAT
+      # 5️⃣ Create and push the tag
+      - name: 🏷 Create & push tag
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           tag="${{ steps.bump_version.outputs.tag }}"
+          echo "🏷 Tagging with: $tag"
 
-          # Force Git to use PAT-authenticated remote
-          git remote set-url origin https://vigneshd-dev:${GH_PAT}@github.com/${{ github.repository }}
+          # (Optional) remove any extraheader if present
+          git config --local --unset-all http.https://github.com/.extraheader || true
 
-          # Check if tag already exists
-          if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "❌ Tag $tag already exists. Auto-incrementing patch..."
-            IFS='.' read -r major minor patch <<< "$tag"
-            patch=$((patch + 1))
-            new_tag="$major.$minor.$patch"
-            git tag "$new_tag"
-            git push origin "refs/tags/$new_tag"
-            echo "✅ Fallback tag pushed: $new_tag"
-          else
-            echo "✅ Creating tag: $tag"
-            git tag "$tag"
-            git push origin "refs/tags/$tag"
-            echo "✅ Tag pushed: $tag"
-          fi
+          # Create the tag
+          git tag "$tag"
+
+          # Push via PAT-authenticated remote
+          git push https://vigneshd-dev:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
+
+          echo "✅ Pushed tag: $tag"
