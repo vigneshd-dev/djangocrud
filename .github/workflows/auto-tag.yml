@@ -3,36 +3,37 @@ name: 🚀 Auto Semantic Versioning & Tagging (PR-Based)
 on:
   pull_request:
     branches:
+      - main
       - develop
       - release
-      - main
       - 'hotfix/*'
       - 'bugfix/*'
-    types: [closed]
+    types: [closed]  # Trigger only when PR is closed
 
 jobs:
   auto-tag:
-    if: github.event.pull_request.merged == true
+    if: github.event.pull_request.merged == true  # Only run if PR is merged
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout full git history
+      - name: 📥 Checkout full Git history
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Get latest tag
+      - name: 🔍 Get latest tag
         id: get_latest_tag
         run: |
           latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
           echo "latest=$latest" >> $GITHUB_OUTPUT
 
-      - name: Determine next version
+      - name: 📈 Determine next version
         id: bump_version
         run: |
           latest="${{ steps.get_latest_tag.outputs.latest }}"
           IFS='.' read -r major minor patch <<< "$latest"
-          branch="${{ github.base_ref }}"
+
+          branch="${{ github.base_ref }}"  # target branch of PR
 
           if [[ "$branch" == "main" ]]; then
             major=$((major + 1)); minor=0; patch=0
@@ -47,28 +48,28 @@ jobs:
           new_tag="$major.$minor.$patch"
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
 
-      - name: Configure Git
+      - name: 🛠️ Configure Git identity
         run: |
           git config user.name "vigneshd.dev"
           git config user.email "vigneshd.dev@gmail.com"
 
-      - name: Create and push new tag (with fallback)
+      - name: 🏷️ Create and push new tag (with fallback)
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           tag="${{ steps.bump_version.outputs.tag }}"
 
+          echo "✅ Creating tag: $tag"
           if git rev-parse "$tag" >/dev/null 2>&1; then
             echo "❌ Tag $tag already exists. Auto-incrementing patch..."
             IFS='.' read -r major minor patch <<< "$tag"
             patch=$((patch + 1))
             new_tag="$major.$minor.$patch"
             git tag "$new_tag"
-            git push https://${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$new_tag"
+            git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$new_tag"
             echo "✅ Fallback tag pushed: $new_tag"
           else
-            echo "✅ Creating tag: $tag"
             git tag "$tag"
-            git push https://${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
+            git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
             echo "✅ Pushed tag: $tag"
           fi
