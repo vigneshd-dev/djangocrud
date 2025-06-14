@@ -18,16 +18,13 @@ jobs:
           git config user.name "vigneshd.dev"
           git config user.email "vigneshd.dev@gmail.com"
 
-      - name: Test pushing tag with GH_PAT
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+      - name: 🏷️ Tag and Push with GH_PAT
         run: |
           tag="test-manual-1.0.0"
           echo "🏷️ Tagging with: $tag"
 
-          # Force Git to use PAT-authenticated remote
           git remote set-url origin https://vigneshd-dev:${GH_PAT}@github.com/${{ github.repository }}
-
-          # Create and push tag
           git tag "$tag"
           git push origin "refs/tags/$tag"
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
