@@ -1,14 +1,15 @@
 name: 🚀 Auto Semantic Versioning & Tagging (PR‑Based)
 
+# Grant write permission so pushing tags is allowed
 permissions:
   contents: write
 
 on:
   pull_request:
     branches:
-      - main
-      - release
       - develop
+      - release
+      - main
       - 'hotfix/*'
       - 'bugfix/*'
     types: [closed]
@@ -19,83 +20,64 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout with GH_PAT
+      # 1️⃣ Checkout using your PAT and disable default credentials
+      - name: 📥 Checkout with GH_PAT
         uses: actions/checkout@v4
         with:
+          # use your PAT so pushes use GH_PAT instead of GITHUB_TOKEN
           token: ${{ secrets.GH_PAT }}
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Get latest tag
+      # 2️⃣ Get the latest existing tag
+      - name: 🔍 Get latest tag
         id: get_latest_tag
         run: |
-          latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
           echo "latest=$latest" >> $GITHUB_OUTPUT
 
-      - name: 📈 Determine next available version
+      # 3️⃣ Compute the next semantic version
+      - name: 📈 Determine next version
         id: bump_version
         run: |
-          # Remove leading 'v' from latest tag if present
           latest="${{ steps.get_latest_tag.outputs.latest }}"
-          latest="${latest#v}"
           IFS='.' read -r major minor patch <<< "$latest"
+          branch="${{ github.base_ref }}"
 
-          base="${{ github.base_ref }}"
-          head="${{ github.head_ref }}"
-
-          echo "Base: $base"
-          echo "Head: $head"
-
-          # Decide which part to bump
-          if [[ "$base" == "main" ]]; then
-            bump="major"
-          elif [[ "$base" == "release" || ("$base" == "develop" && "$head" == feature/*) ]]; then
-            bump="minor"
-          elif [[ "$head" == hotfix/* || "$head" == bugfix/* ]]; then
-            bump="patch"
-          else
-            echo "❌ No matching rule for this PR. Exiting."
-            exit 1
-          fi
-
-          # Bump logic
-          if [[ "$bump" == "major" ]]; then
-            major=$((major + 1))
-            minor=0
-            patch=0
-            while git rev-parse "v$major.0.0" >/dev/null 2>&1; do
-              major=$((major + 1))
-            done
-          elif [[ "$bump" == "minor" ]]; then
-            minor=$((minor + 1))
-            patch=0
-            while git rev-parse "v$major.$minor.0" >/dev/null 2>&1; do
-              minor=$((minor + 1))
-            done
-          elif [[ "$bump" == "patch" ]]; then
+          if [[ "$branch" == "main" ]]; then
+            major=$((major + 1)); minor=0; patch=0
+          elif [[ "$branch" == "release" ]]; then
+            minor=$((minor + 1)); patch=0
+          elif [[ "$branch" == hotfix/* || "$branch" == bugfix/* ]]; then
             patch=$((patch + 1))
-            while git rev-parse "v$major.$minor.$patch" >/dev/null 2>&1; do
-              patch=$((patch + 1))
-            done
+          else
+            minor=$((minor + 1)); patch=0
           fi
 
-          new_tag="v$major.$minor.$patch"
+          new_tag="$major.$minor.$patch"
           echo "tag=$new_tag" >> $GITHUB_OUTPUT
-          echo "✅ Next unique tag: $new_tag"
 
-      - name: Configure Git
+      # 4️⃣ Configure a proper Git identity
+      - name: 🛠 Configure Git
         run: |
           git config user.name "vigneshd.dev"
           git config user.email "vigneshd.dev@gmail.com"
 
-      - name: 🏷️ Create and Push Tag
+      # 5️⃣ Create and push the tag
+      - name: 🏷 Create & push tag
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           tag="${{ steps.bump_version.outputs.tag }}"
-          echo "🚀 Creating tag: $tag"
+          echo "🏷 Tagging with: $tag"
 
+          # (Optional) remove any extraheader if present
           git config --local --unset-all http.https://github.com/.extraheader || true
+
+          # Create the tag
           git tag "$tag"
+
+          # Push via PAT-authenticated remote
           git push https://vigneshd-dev:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
+
           echo "✅ Pushed tag: $tag"
