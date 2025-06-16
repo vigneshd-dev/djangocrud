@@ -1,4 +1,4 @@
-name: 🚀 Auto Semantic Versioning & Tagging
+name: 🚀 Auto Semantic Versioning & Tagging (PR‑Based)
 
 permissions:
   contents: write
@@ -19,20 +19,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Checkout with GH_PAT
+      - name: Checkout with GH_PAT
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_PAT }}
           persist-credentials: false
           fetch-depth: 0
 
-      - name: 🔍 Get latest tag
+      - name: Get latest tag
         id: get_latest_tag
         run: |
           latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
           echo "latest=$latest" >> $GITHUB_OUTPUT
 
-      - name: 📈 Determine next version
+      - name: 📈 Determine next available version
         id: bump_version
         run: |
           latest="${{ steps.get_latest_tag.outputs.latest }}"
@@ -44,42 +44,56 @@ jobs:
           echo "Base: $base"
           echo "Head: $head"
 
+          # Decide which part to bump
           if [[ "$base" == "main" ]]; then
-            major=$((major + 1)); minor=0; patch=0
-          elif [[ "$base" == "release" ]]; then
-            minor=$((minor + 1)); patch=0
-          elif [[ "$base" == "develop" && "$head" == feature/* ]]; then
-            minor=$((minor + 1)); patch=0
+            bump="major"
+          elif [[ "$base" == "release" || ("$base" == "develop" && "$head" == feature/*) ]]; then
+            bump="minor"
           elif [[ "$head" == hotfix/* || "$head" == bugfix/* ]]; then
-            patch=$((patch + 1))
+            bump="patch"
           else
-            echo "❌ No matching versioning rule."
+            echo "❌ No matching rule for this PR. Exiting."
             exit 1
           fi
 
-          new_tag="$major.$minor.$patch"
-          echo "tag=$new_tag" >> $GITHUB_OUTPUT
-          echo "✅ Next version: $new_tag"
+          # Bump logic
+          if [[ "$bump" == "major" ]]; then
+            major=$((major + 1))
+            minor=0
+            patch=0
+            while git rev-parse "v$major.0.0" >/dev/null 2>&1; do
+              major=$((major + 1))
+            done
+          elif [[ "$bump" == "minor" ]]; then
+            minor=$((minor + 1))
+            patch=0
+            while git rev-parse "v$major.$minor.0" >/dev/null 2>&1; do
+              minor=$((minor + 1))
+            done
+          elif [[ "$bump" == "patch" ]]; then
+            patch=$((patch + 1))
+            while git rev-parse "v$major.$minor.$patch" >/dev/null 2>&1; do
+              patch=$((patch + 1))
+            done
+          fi
 
-      - name: 🛠 Configure Git
+          new_tag="v$major.$minor.$patch"
+          echo "tag=$new_tag" >> $GITHUB_OUTPUT
+          echo "✅ Next unique tag: $new_tag"
+
+      - name: Configure Git
         run: |
           git config user.name "vigneshd.dev"
           git config user.email "vigneshd.dev@gmail.com"
 
-      - name: 🏷 Create and Push Tag
+      - name: 🏷️ Create and Push Tag
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           tag="${{ steps.bump_version.outputs.tag }}"
-          echo "🚀 Tagging as: $tag"
-          
+          echo "🚀 Creating tag: $tag"
+
           git config --local --unset-all http.https://github.com/.extraheader || true
-
-          if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "⚠️ Tag $tag already exists. Skipping tag."
-            exit 0
-          fi
-
           git tag "$tag"
           git push https://vigneshd-dev:${GH_PAT}@github.com/${{ github.repository }} "refs/tags/$tag"
-          echo "✅ Tag $tag pushed successfully."
+          echo "✅ Pushed tag: $tag"
